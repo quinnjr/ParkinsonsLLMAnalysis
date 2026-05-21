@@ -1,0 +1,13 @@
+subjects_file synthetic/Samples.Syn.txt
+work_dir /tmp/parkinsons_llm_example
+syn_features synthetic/features.csv
+syn_assay synthetic/assay.csv
+stage1_json_dir synthetic/stage1
+model_name auto
+temperature 0.2
+max_tokens 512
+ollama_auto_start true
+ollama_auto_stop true
+output_pdf true
+keep_chroma false
+keep_temp_html false

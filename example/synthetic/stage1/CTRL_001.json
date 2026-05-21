@@ -1,0 +1,11 @@
+{
+  "subject_id": "CTRL_001",
+  "diagnosis": "HC",
+  "prediction_confidence": 0.88,
+  "disease_stage": null,
+  "top_biomarkers": [
+    {"modality": "proteomics", "feature": "ps129_ratio", "shap": -0.32, "direction": "down"}
+  ],
+  "mofa_factors": {"factor_1": -0.8, "factor_2": 0.3},
+  "environmental_risk_score": 0.25
+}

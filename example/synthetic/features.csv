@@ -1,0 +1,4 @@
+sample,alpha_synuclein_total,ps129_ratio,concentration,agg_index
+PD_001,21.17,0.42,850.0,0.65
+PD_002,21.37,0.48,920.0,0.71
+CTRL_001,19.72,0.18,120.0,0.22

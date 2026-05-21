@@ -1,0 +1,11 @@
+{
+  "subject_id": "PD_001",
+  "diagnosis": "PD",
+  "prediction_confidence": 0.91,
+  "disease_stage": "early",
+  "top_biomarkers": [
+    {"modality": "proteomics", "feature": "ps129_ratio", "shap": 0.55, "direction": "up"}
+  ],
+  "mofa_factors": {"factor_1": 1.0, "factor_2": -0.5},
+  "environmental_risk_score": 0.68
+}

@@ -1,0 +1,20 @@
+# Required
+subjects_file example/synthetic/Samples.Syn.txt
+work_dir /tmp/parkinsons_llm_run
+
+# Upstream artifacts (paths optional; missing = skip collection)
+syn_features example/synthetic/features.csv
+syn_assay example/synthetic/assay.csv
+stage1_json_dir example/synthetic/stage1
+
+# LLM
+model_name auto
+temperature 0.2
+max_tokens 512
+ollama_auto_start false
+ollama_auto_stop false
+
+# Output
+output_pdf false
+keep_chroma false
+keep_temp_html false
