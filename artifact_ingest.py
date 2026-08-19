@@ -9,13 +9,38 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
+try:  # available only inside the PluMA runtime
+    import PyPluMA
+except ImportError:  # pragma: no cover - exercised by standalone/test usage
+    PyPluMA = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
+
+
+def pluma_prefix() -> str:
+    """Return the PluMA pipeline prefix, or an empty string outside PluMA."""
+    if PyPluMA is None:
+        return ""
+    try:
+        return str(PyPluMA.prefix())
+    except Exception:  # pragma: no cover - defensive
+        return ""
+
+
+def resolve_path(value: str | Path) -> str:
+    """Resolve a configured path against the PluMA pipeline prefix.
+
+    ``os.path.join`` leaves absolute values untouched, so absolute paths
+    (e.g. ``work_dir /tmp/...``) and standalone/test usage keep working.
+    """
+    return os.path.join(pluma_prefix(), str(value))
 
 WORK_TYPE_TO_COLLECTION: dict[str, str] = {
     "microbiome": "microbiome",
@@ -159,21 +184,64 @@ def ingest_csv(
     return records
 
 
-def ingest_svc_predictions(path: str | Path, work_type: str = "ml_predictions") -> list[DocumentRecord]:
-    """Ingest bare SVC prediction files (one label per line, no header)."""
+def load_prediction_index(index_file: str | Path) -> list[str]:
+    """Read subject IDs (column 0) from an SVC test-data file, in row order."""
+    p = Path(index_file)
+    df = pd.read_csv(p, sep="\t" if p.suffix.lower() == ".tsv" else ",")
+    return [str(v).strip().strip('"') for v in df.iloc[:, 0]]
+
+
+def ingest_svc_predictions(
+    path: str | Path,
+    work_type: str = "ml_predictions",
+    source_key: str = "svc",
+    index_file: str | Path | None = None,
+) -> list[DocumentRecord]:
+    """Ingest bare SVC prediction files (one label per line, no header).
+
+    ``source_key`` distinguishes artifacts that share a ``work_type`` so their
+    document IDs stay unique within a single Chroma collection. When
+    ``index_file`` is given, its column 0 supplies the real subject IDs; the
+    predictions are ordered exactly as the rows of that file. Rows without a
+    matching index entry fall back to fabricated ``SAMPLE_nnn`` IDs.
+    """
     p = Path(path)
     lines = [ln.strip() for ln in p.read_text().splitlines() if ln.strip()]
+
+    subject_ids: list[str] = []
+    if index_file is not None:
+        try:
+            subject_ids = load_prediction_index(index_file)
+        except Exception as exc:
+            logger.warning("Failed to read prediction index %s: %s", index_file, exc)
+        if subject_ids and len(subject_ids) != len(lines):
+            logger.warning(
+                "Prediction index %s has %d rows but %s has %d predictions; "
+                "unmatched rows keep fabricated IDs",
+                index_file,
+                len(subject_ids),
+                p,
+                len(lines),
+            )
+
     records: list[DocumentRecord] = []
     for idx, label in enumerate(lines):
-        subject_id = f"SAMPLE_{idx + 1:03d}"
-        payload = json.dumps({"prediction": label, "line_index": idx})
+        if idx < len(subject_ids) and subject_ids[idx] and subject_ids[idx].lower() != "nan":
+            subject_id = subject_ids[idx]
+        else:
+            subject_id = f"SAMPLE_{idx + 1:03d}"
+        payload = json.dumps(
+            {"prediction": label, "line_index": idx, "artifact": source_key}
+        )
         records.append(
             DocumentRecord(
-                doc_id=f"{work_type}:{subject_id}:{idx}",
+                doc_id=f"{work_type}:{source_key}:{subject_id}:{idx}",
                 subject_id=subject_id,
                 work_type=work_type,
                 source_file=str(p),
-                summary_text=f"Subject {subject_id} ml_predictions prediction={label}",
+                summary_text=(
+                    f"Subject {subject_id} {work_type} ({source_key}) prediction={label}"
+                ),
                 raw_payload=payload,
             )
         )
@@ -209,6 +277,25 @@ def ingest_json_dir(path: str | Path) -> list[DocumentRecord]:
     return records
 
 
+def _prediction_index_for(
+    params: dict[str, str], param_key: str, pred_path: Path
+) -> Path | None:
+    """Locate the test-data file whose row order matches an SVC prediction file.
+
+    Uses the optional ``<param_key>_index`` parameter when present, otherwise
+    falls back to the sibling ``test_data.csv`` written by DataSplit.
+    """
+    explicit = params.get(f"{param_key}_index")
+    if explicit:
+        candidate = Path(resolve_path(explicit))
+        if candidate.exists():
+            return candidate
+        logger.warning("Missing %s_index file: %s", param_key, candidate)
+        return None
+    sibling = pred_path.parent / "test_data.csv"
+    return sibling if sibling.exists() else None
+
+
 def ingest_all(params: dict[str, str]) -> list[DocumentRecord]:
     """Ingest all configured pipeline artifacts."""
     records: list[DocumentRecord] = []
@@ -217,13 +304,20 @@ def ingest_all(params: dict[str, str]) -> list[DocumentRecord]:
         path_str = params.get(param_key)
         if not path_str:
             continue
-        path = Path(path_str)
+        path = Path(resolve_path(path_str))
         if not path.exists():
             logger.warning("Skipping missing artifact %s: %s", param_key, path)
             continue
         try:
             if param_key in {"svc_microbiome", "svc_syn"}:
-                records.extend(ingest_svc_predictions(path, "ml_predictions"))
+                records.extend(
+                    ingest_svc_predictions(
+                        path,
+                        "ml_predictions",
+                        source_key=param_key,
+                        index_file=_prediction_index_for(params, param_key, path),
+                    )
+                )
             elif param_key == "stage1_json_dir":
                 records.extend(ingest_json_dir(path))
             else:
@@ -233,7 +327,7 @@ def ingest_all(params: dict[str, str]) -> list[DocumentRecord]:
 
     stage1_dir = params.get("stage1_json_dir")
     if stage1_dir and "stage1_json_dir" not in PARAM_ARTIFACT_MAP:
-        records.extend(ingest_json_dir(stage1_dir))
+        records.extend(ingest_json_dir(resolve_path(stage1_dir)))
 
     return records
 

@@ -40,6 +40,7 @@ Key parameters:
 | `work_dir` | Temp workspace for ChromaDB (required) |
 | `syn_features` | Merged α-syn feature matrix |
 | `stage1_json_dir` | Directory of Stage1Output JSON files |
+| `svc_microbiome_index` / `svc_syn_index` | Row-aligned SVC test set used to recover real subject IDs (defaults to `test_data.csv` beside the prediction file; fabricated `SAMPLE_nnn` IDs if absent) |
 | `model_name` | Ollama tag or `auto` |
 | `ollama_auto_start` | Start Ollama if not running |
 | `ollama_auto_stop` | Stop Ollama if we started it |

@@ -24,7 +24,8 @@ cleanup.py                 — temp artifact removal + Ollama shutdown
 
 - Class: `ParkinsonsLLMAnalysis` in `ParkinsonsLLMAnalysis.py`
 - Loader wrapper: `ParkinsonsLLMAnalysisPlugin` in `ParkinsonsLLMAnalysisPlugin.py`
-- Parameters: whitespace key-value (`parameters.parkinsonsllmanalysis.txt`)
+- Parameters: whitespace key-value (`parameters.parkinsonsllmanalysis.txt`), parsed by `_parse_params` (`str.split`, not `PyIO.readParameters`, so spaces or tabs both work)
+- Path resolution: every configured path (`subjects_file`, `work_dir`, all artifact keys) goes through `artifact_ingest.resolve_path`, which joins `PyPluMA.prefix()` via `os.path.join`; absolute values pass through unchanged and `PyPluMA` import failure degrades to a `""` prefix for standalone/test use
 - Outputs: `{base}_{subject_id}.{md,json,pdf}` plus `{base}_cohort.{md,json,pdf}`
 
 ## ChromaDB collections

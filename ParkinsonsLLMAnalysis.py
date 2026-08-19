@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from analysis import analyze_subject
-from artifact_ingest import ingest_all, load_subjects
+from artifact_ingest import ingest_all, load_subjects, resolve_path
 from chroma_store import build_store
 from cleanup import cleanup_session
 from hardware import detect_hardware
@@ -65,7 +65,7 @@ class ParkinsonsLLMAnalysis:
 
     def run(self) -> None:
         """Execute hardware detection, ingestion, RAG, and per-subject analysis."""
-        work_dir = Path(self.parameters["work_dir"])
+        work_dir = Path(resolve_path(self.parameters["work_dir"]))
         work_dir.mkdir(parents=True, exist_ok=True)
         session = OllamaSession(work_dir=work_dir)
         self._run_timestamp = datetime.now(UTC).isoformat()
@@ -82,7 +82,7 @@ class ParkinsonsLLMAnalysis:
             session = ensure_ollama_running(session, self.parameters)
             ensure_model(model)
 
-            subjects = load_subjects(self.parameters["subjects_file"])
+            subjects = load_subjects(resolve_path(self.parameters["subjects_file"]))
             docs = ingest_all(self.parameters)
             db_path = session.work_dir / "chroma"
             build_store(docs, db_path)
